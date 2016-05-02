@@ -1,3 +1,5 @@
+//========== Helper Functions ==========
+
 //From http://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript
 //Generates a unique ID
 function generateUUID(){
@@ -26,27 +28,46 @@ function setScoreValue(elementName, value) {
 
 //The following functions set the team display in the DOM and update the local team variable
 function setTeamRed() {
-    document.getElementById('status').innerHTML = 'You are on <span class="red">red</span> team.';
+    statusElement.innerHTML = 'You are on <span class="red">red</span> team.';
     team = 'red';
 }
 
 function setTeamBlue() {
-    document.getElementById('status').innerHTML = 'You are on <span class="blue">blue</span> team.';
+    statusElement.innerHTML = 'You are on <span class="blue">blue</span> team.';
     team = 'blue';
 }
 
 function setTeamSpectator() {
-    document.getElementById('status').innerHTML = 'You are a spectator.';
+    statusElement.innerHTML = 'You are a spectator.';
     team = 'spectator';
 }
 
-var currentRedPlayer = null;
-var currentBluePlayer = null;
-var playerId = generateUUID();
-var team = 'spectator';
-var malletRadius = 0;
+
+//========== Global (Page) Variables ==========
+
+var currentRedPlayer = null; //The ID of the current red player
+var currentBluePlayer = null; //The ID of the current blue player
+var playerId = generateUUID(); //The ID of our player
+var team = 'spectator'; //The current state of the game
+var malletRadius = 0; //The size of the mallet
+
+//Mouse location - updated with "onmousemove"
+var mouseX = 0;
+var mouseY = 0;
+
+//DOM elements for faster access
+var boardElement; //The "#container" div
+var statusElement; //The div containing "You are a spectator", "Team red", etc.
+var redMalletElement;
+var blueMalletElement;
 
 document.addEventListener('DOMContentLoaded', function(event) {
+    //Set the elements up
+    boardElement = document.getElementById('container');
+    statusElement = document.getElementById('status');
+    redMalletElement = document.getElementById('red-mallet');
+    blueMalletElement = document.getElementById('blue-mallet');
+    
     //You start as a spectator
     setTeamSpectator();
 
@@ -108,15 +129,26 @@ document.addEventListener('DOMContentLoaded', function(event) {
     };
     document.getElementById('join-spectator').onclick = function(){
         tryJoinSpectator();
-    }
+    };
     document.getElementById('clear-score').onclick = function(){
         redScoreRef.remove();
         blueScoreRef.remove();
-    }
+    };
+    
+    //Listen for mouse movement
+    document.onmousemove = function(event) {
+        //Get the mouse location relative to our board
+        var rectObject = boardElement.getBoundingClientRect();
+        var output = {};
+        mouseX =  event.pageX - rectObject.left - window.scrollX;
+        mouseY =  event.pageY - rectObject.top - window.scrollY;
+    };
     
     //Start the game loop
     setInterval(fastLoop, 0);
 });
+
+//========== Game Logic ==========
 
 //To be executed 10 times per second
 function fixedLoop() {
@@ -125,5 +157,14 @@ function fixedLoop() {
 
 //To be executed as quickly as possible
 function fastLoop() {
-    
+    if (team != 'spectator') { //For performance reasons
+        if (team == 'red') {
+            redMalletElement.style.left = mouseX - malletRadius + 'px';
+            redMalletElement.style.top = mouseY - malletRadius + 'px';
+        }
+        else {
+            blueMalletElement.style.left = mouseX - malletRadius + 'px';
+            blueMalletElement.style.top = mouseY - malletRadius + 'px';
+        }
+    }
 }
