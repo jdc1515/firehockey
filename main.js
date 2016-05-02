@@ -29,11 +29,15 @@ function setScoreValue(elementName, value) {
 //The following functions set the team display in the DOM and update the local team variable
 function setTeamRed() {
     statusElement.innerHTML = 'You are on <span class="red">red</span> team.';
+    malletX = redMalletElement.offsetLeft + malletRadius;
+    malletY = redMalletElement.offsetTop + malletRadius;
     team = 'red';
 }
 
 function setTeamBlue() {
     statusElement.innerHTML = 'You are on <span class="blue">blue</span> team.';
+    malletX = blueMalletElement.offsetLeft + malletRadius;
+    malletY = blueMalletElement.offsetTop + malletRadius;
     team = 'blue';
 }
 
@@ -42,24 +46,58 @@ function setTeamSpectator() {
     team = 'spectator';
 }
 
+function resetPuck() {
+    puckVX = 0;
+    puckVY = 0;
+    puckX = defaultPuckX;
+    puckY = defaultPuckY;
+    updatePuckDOM();
+}
+
+function updatePuckDOM() {
+    puckElement.style.left = puckX - puckRadius + 'px';
+    puckElement.style.top = puckY - puckRadius + 'px';    
+}
+
+function sendPuckState() {
+    puckStateRef.set({
+        x: puckX,
+        y: puckY,
+        vx: puckVX,
+        vy: puckVY
+    });
+}
+
+function sendRedMalletState() {
+    redMalletStateRef.set({
+        x: malletX,
+        y: malletY
+    });
+}
+
+function sendBlueMalletState() {
+    blueMalletStateRef.set({
+        x: malletX,
+        y: malletY
+    });
+}
 
 //========== Global (Page) Variables ==========
 
-var currentRedPlayer = null; //The ID of the current red player
-var currentBluePlayer = null; //The ID of the current blue player
 var playerId = generateUUID(); //The ID of our player
 var team = 'spectator'; //The current state of the game
 var malletRadius = 0; //The size of the mallet
 var boardWidth = 0; //The width of the board
 var boardHeight = 0; //The height of the board
+var goalWidth = 140; //The width of each goal
 
 //Mouse location - updated with "onmousemove"
 var mouseX = 0;
 var mouseY = 0;
 
 //History of mallet location saved for velocity calculations
-var lastLeft = 0;
-var lastTop = 0;
+var lastMalletX = 0;
+var lastMalletY = 0;
 
 //The timestamp of the last frame
 var lastTime = 0;
@@ -67,11 +105,28 @@ var lastTime = 0;
 //If the mouse is clicked on the board
 var mouseDown = false;
 
+//The location of the mallet
+var malletX = 0;
+var malletY = 0;
+
 //Puck location/velocity
 var puckX = 0;
 var puckY = 0;
-var puckVX = 1;
-var puckVY = 1;
+var puckVX = 0;
+var puckVY = 0;
+var puckVMax = 1.5; //Max v in pixels/ms
+var defaultPuckX = 0;
+var defaultPuckY = 0;
+
+//The score on each side
+var redScore = 0;
+var blueScore = 0;
+
+//Coefficient of friction times gravity
+mu = 0.00001;
+
+//Exponential decay factor
+alpha = -0.0003;
 
 //DOM elements for faster access
 var boardElement; //The "#container" div
@@ -79,6 +134,15 @@ var statusElement; //The div containing "You are a spectator", "Team red", etc.
 var redMalletElement;
 var blueMalletElement;
 var puckElement;
+
+//Firebase references
+var redScoreRef = new Firebase('https://firehockey.firebaseio.com/red_score');
+var blueScoreRef = new Firebase('https://firehockey.firebaseio.com/blue_score');
+var bluePlayerRef = new Firebase('https://firehockey.firebaseio.com/blue_player');
+var redPlayerRef = new Firebase('https://firehockey.firebaseio.com/red_player');
+var puckStateRef = new Firebase('https://firehockey.firebaseio.com/puck_state');
+var redMalletStateRef = new Firebase('https://firehockey.firebaseio.com/red_mallet_state');
+var blueMalletStateRef = new Firebase('https://firehockey.firebaseio.com/blue_mallet_state');
 
 document.addEventListener('DOMContentLoaded', function(event) {
     //Set the elements up
@@ -94,6 +158,8 @@ document.addEventListener('DOMContentLoaded', function(event) {
     //Get the puck location
     puckX = boardWidth / 2;
     puckY = boardHeight / 2;
+    defaultPuckX = puckX;
+    defaultPuckY = puckY;
     
     //You start as a spectator
     setTeamSpectator();
@@ -102,17 +168,18 @@ document.addEventListener('DOMContentLoaded', function(event) {
     malletRadius = document.getElementById('red-mallet').offsetWidth / 2;
     puckRadius = document.getElementById('puck').offsetWidth / 2;
     
-    var redScoreRef = new Firebase('https://firehockey.firebaseio.com/red_score');
-    var blueScoreRef = new Firebase('https://firehockey.firebaseio.com/blue_score');
-    var bluePlayerRef = new Firebase('https://firehockey.firebaseio.com/blue_player');
-    var redPlayerRef = new Firebase('https://firehockey.firebaseio.com/red_player');
-    
     //Update scores whenever they are changed
     redScoreRef.on('value', function(snapshot){
+        var value = snapshot.val();
+        redScore = value;
         setScoreValue('score-red', snapshot.val());
+        resetPuck();
     });
     blueScoreRef.on('value', function(snapshot){
+        var value = snapshot.val();
+        blueScore = value;
         setScoreValue('score-blue', snapshot.val());
+        resetPuck();
     });
     
     //Listen for team changes
@@ -134,6 +201,33 @@ document.addEventListener('DOMContentLoaded', function(event) {
             if (team == 'red') {
                 setTeamSpectator();
             }
+        }
+    });
+    
+    //Listen for puck state changes
+    puckStateRef.on('value', function(snapshot){
+        var state = snapshot.val();
+        if (state) {
+            puckX = state.x;
+            puckY = state.y;
+            puckVX = state.vx;
+            puckVY = state.vy;
+        }
+    });
+    
+    //Listen for mallet state changes
+    blueMalletStateRef.on('value', function(snapshot){
+        var state = snapshot.val();
+        if (state) {
+            blueMalletElement.style.left = state.x - malletRadius + 'px';
+            blueMalletElement.style.top = state.y - malletRadius + 'px';            
+        }
+    });
+    redMalletStateRef.on('value', function(snapshot){
+        var state = snapshot.val();
+        if (state) {
+            redMalletElement.style.left = state.x - malletRadius + 'px';
+            redMalletElement.style.top = state.y - malletRadius + 'px';            
         }
     });
     
@@ -183,62 +277,119 @@ document.addEventListener('DOMContentLoaded', function(event) {
         mouseDown = false;
     };
     
-    //Start the game loop
+    //Start the game loops
     setInterval(fastLoop, 0);
+    setInterval(fixedLoop, 1000 / 15);
 });
 
 //========== Game Logic ==========
 
-//To be executed 10 times per second
+//To be executed 15 times per second
 function fixedLoop() {
-    
+    if (team == 'red') {
+        sendRedMalletState();
+    }
+    if (team == 'blue') {
+        sendBlueMalletState();
+    }
 }
 
 //To be executed as quickly as possible
 function fastLoop() {
     time = Date.now();
-    if (mouseDown) { //Only move the mallet if the mouse is down
-        var left = mouseX;
-        var top = mouseY;
+    if (mouseDown && team != 'spectator') { //Only move the mallet if the mouse is down
+        malletX = mouseX;
+        malletY = mouseY;
     }
 
     //Ensure the mallet stays in bounds
-    if (left < malletRadius) {
-        left = malletRadius;
+    if (malletX < malletRadius) {
+        malletX = malletRadius;
     }
-    if (top < malletRadius) {
-        top = malletRadius;
+    if (malletY < malletRadius) {
+        malletY = malletRadius;
     }
-    if (left > boardWidth - malletRadius) {
-        left = boardWidth - malletRadius;
+    if (malletX > boardWidth - malletRadius) {
+        malletX = boardWidth - malletRadius;
     }
-    if (top > boardHeight - malletRadius) {
-        top = boardHeight - malletRadius;
+    if (malletY > boardHeight - malletRadius) {
+        malletY = boardHeight - malletRadius;
     }
 
     //Do specific bounds for each mallet, and update location in the DOM
     if (team == 'red') {
-        if (top > boardHeight/2 - malletRadius) {
-            top = boardHeight/2 - malletRadius;
+        if (malletY > boardHeight/2 - malletRadius) {
+            malletY = boardHeight/2 - malletRadius;
         }
-        redMalletElement.style.left = left - malletRadius + 'px';
-        redMalletElement.style.top = top - malletRadius + 'px';
+        redMalletElement.style.left = malletX - malletRadius + 'px';
+        redMalletElement.style.top = malletY - malletRadius + 'px';
     }
     else if (team == 'blue') {
-        if (top < boardHeight/2 + malletRadius) {
-            top = boardHeight/2 + malletRadius;
+        if (malletY < boardHeight/2 + malletRadius) {
+            malletY = boardHeight/2 + malletRadius;
         }
-        blueMalletElement.style.left = left - malletRadius + 'px';
-        blueMalletElement.style.top = top - malletRadius + 'px';
+        blueMalletElement.style.left = malletX - malletRadius + 'px';
+        blueMalletElement.style.top = malletY - malletRadius + 'px';
     }
 
     //Collision detection - update velocity here
-    if ((left-puckX)*(left-puckX) + (top-puckY)*(top-puckY) < (malletRadius+puckRadius)*(malletRadius+puckRadius)) {
+    var isCollision = (malletX-puckX)*(malletX-puckX) + (malletY-puckY)*(malletY-puckY) < (malletRadius+puckRadius)*(malletRadius+puckRadius);
+    if (isCollision && team != 'spectator') {
+        //First, move the puck so that it's no longer inside the mallet
+        var offsetX = puckX - malletX;
+        var offsetY = puckY - malletY;
+        var offsetMagnitude = Math.sqrt(offsetX*offsetX + offsetY*offsetY);
+        puckX = malletX + offsetX / offsetMagnitude * (malletRadius + puckRadius);
+        puckY = malletY + offsetY / offsetMagnitude * (malletRadius + puckRadius);
+        
+        //These lines compute the new velocity for the puck
+        var malletVX = (malletX - lastMalletX) / dt;
+        var malletVY = (malletY - lastMalletY) / dt;
+        var vRelX = puckVX - malletVX;
+        var vRelY = puckVY - malletVY;
+        offsetX = puckX - malletX;
+        offsetY = puckY - malletY;
+        offsetMagnitude = Math.sqrt(offsetX*offsetX + offsetY*offsetY);
+        var unitOffsetX = offsetX / offsetMagnitude;
+        var unitOffsetY = offsetY / offsetMagnitude;
+        var vRelPerpX = (unitOffsetX) * (vRelX * unitOffsetX + vRelY * unitOffsetY);
+        var vRelPerpY = (unitOffsetY) * (vRelX * unitOffsetX + vRelY * unitOffsetY);
+        var newVRelX = vRelX - 2*vRelPerpX;
+        var newVRelY = vRelY - 2*vRelPerpY;
+        puckVX = newVRelX + malletVX;
+        puckVY = newVRelY + malletVY;
+        
+        //This may happen occasionally
+        if (isNaN(puckVX) || isNaN(puckVY)) {
+            puckVX = 0;
+            puckVY = 0;
+        }
+        
+        //Update the puck state in Firebase
+        sendPuckState();
     }
 
     //Update change in time
     dt = time - lastTime;
 
+    //Max velocity on the puck
+    puckVMag = Math.sqrt(puckVX*puckVX + puckVY*puckVY);
+    if (puckVMag > puckVMax) {
+        puckVX = puckVMax * puckVX / puckVMag;
+        puckVY = puckVMax * puckVY / puckVMag;
+    }
+    
+    //Compute friction
+    var newPuckVMag = puckVMag - mu * dt;
+    newPuckVMag = newPuckVMag * Math.exp(alpha*dt);
+    if (newPuckVMag < 0) {
+        newPuckVMag = 0;
+    }
+    if (puckVMag > 0) {
+        puckVX = newPuckVMag * puckVX / puckVMag;
+        puckVY = newPuckVMag * puckVY / puckVMag;
+    }
+    
     //Move the puck around
     puckX = puckX + dt*puckVX;
     puckY = puckY + dt*puckVY;
@@ -252,21 +403,28 @@ function fastLoop() {
         puckX = puckRadius;
         puckVX = -puckVX;
     }
+
+    var isInGoalLane = puckX > (boardWidth/2 - goalWidth/2) && puckX < (boardWidth/2 + goalWidth/2);
     if (puckY > boardHeight - puckRadius) {
         puckY = boardHeight - puckRadius;
         puckVY = -puckVY;
+        if (team == 'blue' && isInGoalLane) {
+            redScoreRef.set(redScore + 1);
+        }
     }
     if (puckY < puckRadius) {
         puckY = puckRadius;
         puckVY = -puckVY;
+        if (team == 'red' && isInGoalLane) {
+            blueScoreRef.set(blueScore + 1);
+        }
     }
-    
+
     //Update the puck position in the DOM
-    puckElement.style.left = puckX - puckRadius + 'px';
-    puckElement.style.top = puckY - puckRadius + 'px';
+    updatePuckDOM();
 
     //Update variables for the next iteration
-    lastLeft = left;
-    lastTop = top;
+    lastMalletX = malletX;
+    lastMalletY = malletY;
     lastTime = time;
 }

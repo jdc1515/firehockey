@@ -68,6 +68,7 @@
     position: absolute;
     box-shadow: 3px 3px 3px #aaa;
     border: 1px solid #3b3b3b;
+    background: white;
 }
 
 .floating p {
