@@ -1,5 +1,4 @@
 //========== Helper Functions ==========
-
 //From http://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript
 //Generates a unique ID
 function generateUUID(){
@@ -33,19 +32,28 @@ function setTeamRed() {
     malletY = redMalletElement.offsetTop + malletRadius;
     team = 'red';
 }
-
 function setTeamBlue() {
     statusElement.innerHTML = 'You are on <span class="blue">blue</span> team.';
     malletX = blueMalletElement.offsetLeft + malletRadius;
     malletY = blueMalletElement.offsetTop + malletRadius;
     team = 'blue';
 }
-
 function setTeamSpectator() {
     statusElement.innerHTML = 'You are a spectator.';
     team = 'spectator';
 }
 
+//Remove self from team, if we're on a team
+function tryJoinSpectator(){
+    if (team == 'red') {
+        redPlayerRef.remove();
+    }
+    if (team == 'blue') {
+        bluePlayerRef.remove();
+    }
+}
+
+//Resets the puck location locally and in the DOM
 function resetPuck() {
     puckVX = 0;
     puckVY = 0;
@@ -54,11 +62,13 @@ function resetPuck() {
     updatePuckDOM();
 }
 
+//Updates the puck location in the DOM
 function updatePuckDOM() {
     puckElement.style.left = puckX - puckRadius + 'px';
     puckElement.style.top = puckY - puckRadius + 'px';    
 }
 
+//Saves the local puck state to Firebase
 function sendPuckState() {
     puckStateRef.set({
         x: puckX,
@@ -68,6 +78,7 @@ function sendPuckState() {
     });
 }
 
+//Saves the local red mallet state to Firebase
 function sendRedMalletState() {
     redMalletStateRef.set({
         x: malletX,
@@ -75,6 +86,7 @@ function sendRedMalletState() {
     });
 }
 
+//Saves the local blue mallet state to Firebase
 function sendBlueMalletState() {
     blueMalletStateRef.set({
         x: malletX,
@@ -82,16 +94,15 @@ function sendBlueMalletState() {
     });
 }
 
+//Sends a "keelalive" signal to let the opponent know we're still there
 function sendBlueKeepAlive() {
     blueKeepAliveRef.set(Date.now());
 }
-
 function sendRedKeepAlive() {
     redKeepAliveRef.set(Date.now());
 }
 
 //========== Global (Page) Variables ==========
-
 var playerId = generateUUID(); //The ID of our player
 var team = 'spectator'; //The current state of the game
 var malletRadius = 0; //The size of the mallet
@@ -122,7 +133,7 @@ var puckY = 0;
 var puckVX = 0;
 var puckVY = 0;
 
-//Set on DOM ready
+//Set on DOM ready - the starting location of the puck based on the DOM location
 var defaultPuckX = 0;
 var defaultPuckY = 0;
 
@@ -139,7 +150,7 @@ var DOMStartTime = Date.now();
 
 //Constants
 var mu = 0.00001; //Coefficient of friction times gravity
-var alpha = -0.0003; //Exponential decay factor
+var alpha = -0.0003; //Exponential velocity decay factor v = v0*exp(alpha*dt)
 var puckVMax = 1.5; //Max v in pixels/ms
 var keepAliveTimeout = 1000; //Time in ms before we consider the opponent missing
 var goalWidth = 140; //The width of each goal
@@ -175,6 +186,8 @@ document.addEventListener('DOMContentLoaded', function(event) {
     puckElement = document.getElementById('puck');
     boardWidth = boardElement.offsetWidth;
     boardHeight = boardElement.offsetHeight;
+    
+    //For the game logic
     lastTime = Date.now();
     
     //Get the puck location
@@ -262,14 +275,6 @@ document.addEventListener('DOMContentLoaded', function(event) {
     });
     
     //Bind events to each of the buttons
-    function tryJoinSpectator(){
-        if (team == 'red') {
-            redPlayerRef.remove();
-        }
-        if (team == 'blue') {
-            bluePlayerRef.remove();
-        }
-    }
     document.getElementById('join-red').onclick = function(){
         tryJoinSpectator();
         redPlayerRef.set(playerId);
@@ -282,8 +287,11 @@ document.addEventListener('DOMContentLoaded', function(event) {
         tryJoinSpectator();
     };
     document.getElementById('clear-score').onclick = function(){
+        //Reset the scores in Firebase - listener should handle the rest
         redScoreRef.remove();
         blueScoreRef.remove();
+        
+        //Reset the puck location, and send this info to Firebase
         resetPuck();
         sendPuckState();
     };
@@ -297,6 +305,7 @@ document.addEventListener('DOMContentLoaded', function(event) {
         mouseY =  event.pageY - rectObject.top - window.scrollY;
     };
     
+    //Move the mallet on mouse down (signal to the game loop)
     boardElement.onmousedown = function(event) {
         event.preventDefault(); //Prevent drag and drop
         mouseDown = true;
@@ -304,6 +313,8 @@ document.addEventListener('DOMContentLoaded', function(event) {
             alert('You need to join a team before you can move your mallet!');
         }
     };
+    
+    //When the mouse is released, release the mallet - use on document this time so a mouseup anywhere triggers this
     document.onmouseup = function(event) {
         event.preventDefault();
         mouseDown = false;
@@ -319,7 +330,6 @@ document.addEventListener('DOMContentLoaded', function(event) {
 });
 
 //========== Game Logic ==========
-
 //To be executed 10 times per second
 function fixedLoop() {
     if (team == 'red') {
@@ -341,6 +351,9 @@ function keepAliveLoop() {
         lastBlueKeepAlive = Date.now();
         sendBlueKeepAlive();
     }
+    
+    //If a certain amount of time has passed, deem the opponent "inactive" and hide their side
+    //TODO: rework this section with Firebase onDisconnect functionality
     var passedDOMTime = Date.now() > DOMStartTime + keepAliveTimeout * 2;
     if (Date.now() < lastRedKeepAlive + keepAliveTimeout && passedDOMTime) {
         redCoverElement.style.display = 'none';
@@ -405,6 +418,8 @@ function fastLoop() {
         puckY = malletY + offsetY / offsetMagnitude * (malletRadius + puckRadius);
         
         //These lines compute the new velocity for the puck
+        //We assume a perfectly elastic collision between the puck and the mallet
+        //We approximate the mallet as having infinite mass (since we can't push the mouse around)
         var malletVX = (malletX - lastMalletX) / dt;
         var malletVY = (malletY - lastMalletY) / dt;
         var vRelX = puckVX - malletVX;
@@ -421,7 +436,7 @@ function fastLoop() {
         puckVX = newVRelX + malletVX;
         puckVY = newVRelY + malletVY;
         
-        //This may happen occasionally
+        //This may happen occasionally if there is a divide by zero - safeguard just in case
         if (isNaN(puckVX) || isNaN(puckVY)) {
             puckVX = 0;
             puckVY = 0;
@@ -456,7 +471,7 @@ function fastLoop() {
     puckX = puckX + dt*puckVX;
     puckY = puckY + dt*puckVY;
     
-    //Handle bounces
+    //Handle bounces off walls
     if (puckX > boardWidth - puckRadius) {
         puckX = boardWidth - puckRadius;
         puckVX = -puckVX;
@@ -466,6 +481,7 @@ function fastLoop() {
         puckVX = -puckVX;
     }
 
+    //Logic to check if we've scored
     var isInGoalLane = puckX > (boardWidth/2 - goalWidth/2) && puckX < (boardWidth/2 + goalWidth/2);
     if (puckY > boardHeight - puckRadius) {
         puckY = boardHeight - puckRadius;
