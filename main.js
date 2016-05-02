@@ -50,10 +50,19 @@ var currentBluePlayer = null; //The ID of the current blue player
 var playerId = generateUUID(); //The ID of our player
 var team = 'spectator'; //The current state of the game
 var malletRadius = 0; //The size of the mallet
+var boardWidth = 0; //The width of the board
+var boardHeight = 0; //The height of the board
 
 //Mouse location - updated with "onmousemove"
 var mouseX = 0;
 var mouseY = 0;
+
+//If the mouse is clicked on the board
+var mouseDown = false;
+
+//Puck location
+var puckX = 0;
+var puckY = 0;
 
 //DOM elements for faster access
 var boardElement; //The "#container" div
@@ -67,13 +76,19 @@ document.addEventListener('DOMContentLoaded', function(event) {
     statusElement = document.getElementById('status');
     redMalletElement = document.getElementById('red-mallet');
     blueMalletElement = document.getElementById('blue-mallet');
+    boardWidth = boardElement.offsetWidth;
+    boardHeight = boardElement.offsetHeight;
+    
+    //Get the puck location
+    puckX = boardWidth / 2;
+    puckY = boardHeight / 2;
     
     //You start as a spectator
     setTeamSpectator();
 
-    //Calculate mallet size
+    //Calculate mallet/puck size
     malletRadius = document.getElementById('red-mallet').offsetWidth / 2;
-    console.log(malletRadius);
+    puckRadius = document.getElementById('puck').offsetWidth / 2;
     
     var redScoreRef = new Firebase('https://firehockey.firebaseio.com/red_score');
     var blueScoreRef = new Firebase('https://firehockey.firebaseio.com/blue_score');
@@ -135,13 +150,22 @@ document.addEventListener('DOMContentLoaded', function(event) {
         blueScoreRef.remove();
     };
     
-    //Listen for mouse movement
+    //Listen for mouse events
     document.onmousemove = function(event) {
         //Get the mouse location relative to our board
         var rectObject = boardElement.getBoundingClientRect();
         var output = {};
         mouseX =  event.pageX - rectObject.left - window.scrollX;
         mouseY =  event.pageY - rectObject.top - window.scrollY;
+    };
+    
+    boardElement.onmousedown = function(event) {
+        event.preventDefault(); //Prevent drag and drop
+        mouseDown = true;
+    };
+    document.onmouseup = function(event) {
+        event.preventDefault();
+        mouseDown = false;
     };
     
     //Start the game loop
@@ -158,13 +182,40 @@ function fixedLoop() {
 //To be executed as quickly as possible
 function fastLoop() {
     if (team != 'spectator') { //For performance reasons
+        if (mouseDown) { //Only move the mallet if the mouse is down
+            var left = mouseX;
+            var top = mouseY;
+        }
+        if (left < malletRadius) {
+            left = malletRadius;
+        }
+        if (top < malletRadius) {
+            top = malletRadius;
+        }
+        if (left > boardWidth - malletRadius) {
+            left = boardWidth - malletRadius;
+        }
+        if (top > boardHeight - malletRadius) {
+            top = boardHeight - malletRadius;
+        }
         if (team == 'red') {
-            redMalletElement.style.left = mouseX - malletRadius + 'px';
-            redMalletElement.style.top = mouseY - malletRadius + 'px';
+            if (top > boardHeight/2 - malletRadius) {
+                top = boardHeight/2 - malletRadius;
+            }
+            redMalletElement.style.left = left - malletRadius + 'px';
+            redMalletElement.style.top = top - malletRadius + 'px';
         }
         else {
-            blueMalletElement.style.left = mouseX - malletRadius + 'px';
-            blueMalletElement.style.top = mouseY - malletRadius + 'px';
+            if (top < boardHeight/2 + malletRadius) {
+                top = boardHeight/2 + malletRadius;
+            }
+            blueMalletElement.style.left = left - malletRadius + 'px';
+            blueMalletElement.style.top = top - malletRadius + 'px';
+        }
+        
+        if ((left-puckX)*(left-puckX) + (top-puckY)*(top-puckY) < (malletRadius+puckRadius)*(malletRadius+puckRadius)) {
+            console.log('collision');
+            console.log(left);
         }
     }
 }
