@@ -284,6 +284,8 @@ document.addEventListener('DOMContentLoaded', function(event) {
     document.getElementById('clear-score').onclick = function(){
         redScoreRef.remove();
         blueScoreRef.remove();
+        resetPuck();
+        sendPuckState();
     };
     
     //Listen for mouse events
