@@ -113,18 +113,19 @@
 #instructions {
     top: 70px;
     width: 200px;
-    height: 210px;
+    height: 350px;
+}
+
+#status {
+    top: 470px;
+    width: 200px;
+    height: 30px;
 }
 
 #bottom {
     text-align: center;
 }
 
-#status {
-    top: 330px;
-    width: 200px;
-    height: 30px;
-}
 
 #top-bar {
     height: 45px;
