@@ -1,0 +1,130 @@
+* {
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+}
+
+.red {
+    color: #f00;
+}
+
+.blue {
+    color: #007cdd;
+}
+
+#scores {
+    text-align: center;
+    font-size: 50px;
+    margin-top: 5px;
+}
+
+#score-red {
+    color: #f00;
+    display: inline-block;
+}
+
+#score-blue {
+    color: #007cdd;
+    display: inline-block;
+}
+
+.mallet {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    background-size: cover !important;
+}
+
+#red-mallet {
+    background: url('red_mallet.svg');
+    left: 167px;
+    top: 100px;
+}
+
+#blue-mallet {
+    background: url('blue_mallet.svg');
+    left: 167px;
+    top: 560px;
+}
+
+.floating {
+    border-radius: 10px;
+    padding: 15px;
+    left: 10px;
+    position: absolute;
+    box-shadow: 3px 3px 3px #aaa;
+    border: 1px solid #3b3b3b;
+}
+
+.bold-heading {
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.button {
+    position: relative;
+    display: inline-block;
+    padding: 7px;
+    border-radius: 5px;
+    box-shadow: 0px 5px 0px #666;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    color: white;
+    background: #999;
+    margin-bottom: 10px;
+}
+
+.button:active {
+    box-shadow: 0px 1px 0px #666 !important;
+    top: 4px;
+}
+
+#join-red {
+    background: #d00;
+    box-shadow: 0px 5px 0px #900;
+}
+
+#join-blue {
+    background: #007cdd;
+    box-shadow: 0px 5px 0px #003a99;
+}
+
+#instructions {
+    top: 70px;
+    width: 200px;
+    height: 150px;
+}
+
+#bottom {
+    text-align: center;
+}
+
+#status {
+    top: 270px;
+    width: 200px;
+    height: 30px;
+}
+
+#top-bar {
+    height: 45px;
+    width: 100%;
+    background: #3b3b3b;
+    box-shadow: 0 1px 5px #333;
+    color: white;
+    font-size: 30px;
+    padding-left: 10px;
+    padding-top: 5px;
+}
+
+#container {
+    /* Original resolution is 340px by 600px */
+    width: 425px;
+    height: 750px;
+    background: url("table.svg");
+    background-size: cover;
+    margin: 5px auto;
+    box-shadow: 5px 5px 5px #999;
+    position: relative;
+}

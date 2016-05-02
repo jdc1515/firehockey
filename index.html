@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Air Hockey</title>
+    <script src="https://cdn.firebase.com/js/client/2.4.2/firebase.js"></script>
+    <script src="main.js"></script>
+    <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <div id="top-bar">Firebase Air Hockey</div>
+    <div id="scores">
+        <div id="score-red">0</div>
+        -
+        <div id="score-blue">0</div>
+    </div>
+    <div id="container">
+        <div class="mallet" id="red-mallet"></div>
+        <div class="mallet" id="blue-mallet"></div>
+    </div>
+    <div id="bottom">
+        <div class="button" id="join-red">Join Red Team</div>
+        <div class="button" id="join-blue">Join Blue Team</div><br>
+        <div class="button" id="join-spectator">Spectate</div>
+        <div class="button" id="clear-score">Clear Score</div>
+    </div>
+    <div class="floating" id="instructions">
+        <div class="bold-heading">Instructions</div>
+        Click "Join Red Team" or "Join Blue Team" to pick a side.  If someone is already on that team, they will become a spectator.
+    </div>
+    <div class="floating" id="status"></div>
+</body>
+</html>
