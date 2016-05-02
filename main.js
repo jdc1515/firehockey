@@ -57,18 +57,28 @@ var boardHeight = 0; //The height of the board
 var mouseX = 0;
 var mouseY = 0;
 
+//History of mallet location saved for velocity calculations
+var lastLeft = 0;
+var lastTop = 0;
+
+//The timestamp of the last frame
+var lastTime = 0;
+
 //If the mouse is clicked on the board
 var mouseDown = false;
 
-//Puck location
+//Puck location/velocity
 var puckX = 0;
 var puckY = 0;
+var puckVX = 1;
+var puckVY = 1;
 
 //DOM elements for faster access
 var boardElement; //The "#container" div
 var statusElement; //The div containing "You are a spectator", "Team red", etc.
 var redMalletElement;
 var blueMalletElement;
+var puckElement;
 
 document.addEventListener('DOMContentLoaded', function(event) {
     //Set the elements up
@@ -76,8 +86,10 @@ document.addEventListener('DOMContentLoaded', function(event) {
     statusElement = document.getElementById('status');
     redMalletElement = document.getElementById('red-mallet');
     blueMalletElement = document.getElementById('blue-mallet');
+    puckElement = document.getElementById('puck');
     boardWidth = boardElement.offsetWidth;
     boardHeight = boardElement.offsetHeight;
+    lastTime = Date.now();
     
     //Get the puck location
     puckX = boardWidth / 2;
@@ -162,6 +174,9 @@ document.addEventListener('DOMContentLoaded', function(event) {
     boardElement.onmousedown = function(event) {
         event.preventDefault(); //Prevent drag and drop
         mouseDown = true;
+        if (team == 'spectator') {
+            alert('You need to join a team before you can move your mallet!');
+        }
     };
     document.onmouseup = function(event) {
         event.preventDefault();
@@ -181,41 +196,77 @@ function fixedLoop() {
 
 //To be executed as quickly as possible
 function fastLoop() {
-    if (team != 'spectator') { //For performance reasons
-        if (mouseDown) { //Only move the mallet if the mouse is down
-            var left = mouseX;
-            var top = mouseY;
-        }
-        if (left < malletRadius) {
-            left = malletRadius;
-        }
-        if (top < malletRadius) {
-            top = malletRadius;
-        }
-        if (left > boardWidth - malletRadius) {
-            left = boardWidth - malletRadius;
-        }
-        if (top > boardHeight - malletRadius) {
-            top = boardHeight - malletRadius;
-        }
-        if (team == 'red') {
-            if (top > boardHeight/2 - malletRadius) {
-                top = boardHeight/2 - malletRadius;
-            }
-            redMalletElement.style.left = left - malletRadius + 'px';
-            redMalletElement.style.top = top - malletRadius + 'px';
-        }
-        else {
-            if (top < boardHeight/2 + malletRadius) {
-                top = boardHeight/2 + malletRadius;
-            }
-            blueMalletElement.style.left = left - malletRadius + 'px';
-            blueMalletElement.style.top = top - malletRadius + 'px';
-        }
-        
-        if ((left-puckX)*(left-puckX) + (top-puckY)*(top-puckY) < (malletRadius+puckRadius)*(malletRadius+puckRadius)) {
-            console.log('collision');
-            console.log(left);
-        }
+    time = Date.now();
+    if (mouseDown) { //Only move the mallet if the mouse is down
+        var left = mouseX;
+        var top = mouseY;
     }
+
+    //Ensure the mallet stays in bounds
+    if (left < malletRadius) {
+        left = malletRadius;
+    }
+    if (top < malletRadius) {
+        top = malletRadius;
+    }
+    if (left > boardWidth - malletRadius) {
+        left = boardWidth - malletRadius;
+    }
+    if (top > boardHeight - malletRadius) {
+        top = boardHeight - malletRadius;
+    }
+
+    //Do specific bounds for each mallet, and update location in the DOM
+    if (team == 'red') {
+        if (top > boardHeight/2 - malletRadius) {
+            top = boardHeight/2 - malletRadius;
+        }
+        redMalletElement.style.left = left - malletRadius + 'px';
+        redMalletElement.style.top = top - malletRadius + 'px';
+    }
+    else if (team == 'blue') {
+        if (top < boardHeight/2 + malletRadius) {
+            top = boardHeight/2 + malletRadius;
+        }
+        blueMalletElement.style.left = left - malletRadius + 'px';
+        blueMalletElement.style.top = top - malletRadius + 'px';
+    }
+
+    //Collision detection - update velocity here
+    if ((left-puckX)*(left-puckX) + (top-puckY)*(top-puckY) < (malletRadius+puckRadius)*(malletRadius+puckRadius)) {
+    }
+
+    //Update change in time
+    dt = time - lastTime;
+
+    //Move the puck around
+    puckX = puckX + dt*puckVX;
+    puckY = puckY + dt*puckVY;
+    
+    //Handle bounces
+    if (puckX > boardWidth - puckRadius) {
+        puckX = boardWidth - puckRadius;
+        puckVX = -puckVX;
+    }
+    if (puckX < puckRadius) {
+        puckX = puckRadius;
+        puckVX = -puckVX;
+    }
+    if (puckY > boardHeight - puckRadius) {
+        puckY = boardHeight - puckRadius;
+        puckVY = -puckVY;
+    }
+    if (puckY < puckRadius) {
+        puckY = puckRadius;
+        puckVY = -puckVY;
+    }
+    
+    //Update the puck position in the DOM
+    puckElement.style.left = puckX - puckRadius + 'px';
+    puckElement.style.top = puckY - puckRadius + 'px';
+
+    //Update variables for the next iteration
+    lastLeft = left;
+    lastTop = top;
+    lastTime = time;
 }
