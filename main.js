@@ -82,6 +82,14 @@ function sendBlueMalletState() {
     });
 }
 
+function sendBlueKeepAlive() {
+    blueKeepAliveRef.set(Date.now());
+}
+
+function sendRedKeepAlive() {
+    redKeepAliveRef.set(Date.now());
+}
+
 //========== Global (Page) Variables ==========
 
 var playerId = generateUUID(); //The ID of our player
@@ -89,7 +97,6 @@ var team = 'spectator'; //The current state of the game
 var malletRadius = 0; //The size of the mallet
 var boardWidth = 0; //The width of the board
 var boardHeight = 0; //The height of the board
-var goalWidth = 140; //The width of each goal
 
 //Mouse location - updated with "onmousemove"
 var mouseX = 0;
@@ -114,7 +121,8 @@ var puckX = 0;
 var puckY = 0;
 var puckVX = 0;
 var puckVY = 0;
-var puckVMax = 1.5; //Max v in pixels/ms
+
+//Set on DOM ready
 var defaultPuckX = 0;
 var defaultPuckY = 0;
 
@@ -122,11 +130,19 @@ var defaultPuckY = 0;
 var redScore = 0;
 var blueScore = 0;
 
-//Coefficient of friction times gravity
-mu = 0.00001;
+//The last time a keepalive was sent by either player
+var lastRedKeepAlive = Date.now();
+var lastBlueKeepAlive = Date.now();
 
-//Exponential decay factor
-alpha = -0.0003;
+//Time since program start (from the DOM load)
+var DOMStartTime = Date.now();
+
+//Constants
+var mu = 0.00001; //Coefficient of friction times gravity
+var alpha = -0.0003; //Exponential decay factor
+var puckVMax = 1.5; //Max v in pixels/ms
+var keepAliveTimeout = 1000; //Time in ms before we consider the opponent missing
+var goalWidth = 140; //The width of each goal
 
 //DOM elements for faster access
 var boardElement; //The "#container" div
@@ -134,6 +150,8 @@ var statusElement; //The div containing "You are a spectator", "Team red", etc.
 var redMalletElement;
 var blueMalletElement;
 var puckElement;
+var redCoverElement;
+var blueCoverElement;
 
 //Firebase references
 var redScoreRef = new Firebase('https://firehockey.firebaseio.com/red_score');
@@ -143,6 +161,8 @@ var redPlayerRef = new Firebase('https://firehockey.firebaseio.com/red_player');
 var puckStateRef = new Firebase('https://firehockey.firebaseio.com/puck_state');
 var redMalletStateRef = new Firebase('https://firehockey.firebaseio.com/red_mallet_state');
 var blueMalletStateRef = new Firebase('https://firehockey.firebaseio.com/blue_mallet_state');
+var redKeepAliveRef = new Firebase('https://firehockey.firebaseio.com/red_keep_alive');
+var blueKeepAliveRef = new Firebase('https://firehockey.firebaseio.com/blue_keep_alive');
 
 document.addEventListener('DOMContentLoaded', function(event) {
     //Set the elements up
@@ -150,6 +170,8 @@ document.addEventListener('DOMContentLoaded', function(event) {
     statusElement = document.getElementById('status');
     redMalletElement = document.getElementById('red-mallet');
     blueMalletElement = document.getElementById('blue-mallet');
+    redCoverElement = document.getElementById('red-cover');
+    blueCoverElement = document.getElementById('blue-cover');
     puckElement = document.getElementById('puck');
     boardWidth = boardElement.offsetWidth;
     boardHeight = boardElement.offsetHeight;
@@ -215,6 +237,14 @@ document.addEventListener('DOMContentLoaded', function(event) {
         }
     });
     
+    //Listen for keepalive signals
+    redKeepAliveRef.on('value', function(snapshot) {
+        lastRedKeepAlive = Date.now();
+    });
+    blueKeepAliveRef.on('value', function(snapshot) {
+        lastBlueKeepAlive = Date.now();
+    });
+    
     //Listen for mallet state changes
     blueMalletStateRef.on('value', function(snapshot){
         var state = snapshot.val();
@@ -277,20 +307,50 @@ document.addEventListener('DOMContentLoaded', function(event) {
         mouseDown = false;
     };
     
+    //The DOM has finished loading
+    DOMStartTime = Date.now();
+    
     //Start the game loops
     setInterval(fastLoop, 0);
-    setInterval(fixedLoop, 1000 / 15);
+    setInterval(fixedLoop, 1000 / 10);
+    setInterval(keepAliveLoop, 1000 / 3);
 });
 
 //========== Game Logic ==========
 
-//To be executed 15 times per second
+//To be executed 10 times per second
 function fixedLoop() {
     if (team == 'red') {
         sendRedMalletState();
     }
     if (team == 'blue') {
         sendBlueMalletState();
+    }
+}
+
+//To be executed 3 times per second
+//Let's the opponent/spectators know that a team is occupied
+function keepAliveLoop() {
+    if (team == 'red') {
+        lastRedKeepAlive = Date.now();
+        sendRedKeepAlive();
+    }
+    if (team == 'blue') {
+        lastBlueKeepAlive = Date.now();
+        sendBlueKeepAlive();
+    }
+    var passedDOMTime = Date.now() > DOMStartTime + keepAliveTimeout * 2;
+    if (Date.now() < lastRedKeepAlive + keepAliveTimeout && passedDOMTime) {
+        redCoverElement.style.display = 'none';
+    }
+    else {
+        redCoverElement.style.display = 'block';
+    }
+    if (Date.now() < lastBlueKeepAlive + keepAliveTimeout && passedDOMTime) {
+        blueCoverElement.style.display = 'none';
+    }
+    else {
+        blueCoverElement.style.display = 'block';
     }
 }
 

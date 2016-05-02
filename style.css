@@ -49,6 +49,23 @@
     top: 500px;
 }
 
+.cover {
+    position: absolute;
+    background: white;
+    width: 374px;
+    left: 0;
+    height: 330px;
+    opacity: 0.9;
+}
+
+#red-cover {
+    top: 0;
+}
+
+#blue-cover {
+    top: 330px;
+}
+
 #puck {
     width: 44px;
     height: 44px;
